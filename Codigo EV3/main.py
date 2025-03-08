@@ -14,12 +14,16 @@ from umqtt.simple import MQTTClient
 # Configurações do MQTT
 BROKER = "exemplo-mqtt.org"  # Substituir pelo endereço web ou IP do Broker
 PORT = 1883  # Porta padrão para comunicação com o Broker
-TOPIC_RECEIVE = b"Mqtt/Motor" # Tópico para receber os valores
+TOPIC_SERVO = b"Mqtt/Servo" # Tópico para receber os valores do servo
+TOPIC_ESQ = b"Mqtt/MotorEsq" # Tópico para receber os valores do motor esquerdo
+TOPIC_DIR = b"Mqtt/MotorDir" # Tópico para receber os valores do motor direito
 TOPIC_SEND = b"Mqtt/Status" # Tópico para troca de informações
 CLIENT_ID = b"Seu_Brick_EV3" # Substituir pelo nome do Brick
 
 ev3 = EV3Brick() # Cria um objeto EV3Brick
-motor = Motor(Port.A) # Cria um objeto Motor na porta A
+servo = Motor(Port.A) # Cria um objeto Motor na porta A
+motorEsq = Motor(Port.B) # Cria um objeto Motor na porta B
+motorDir = Motor(Port.C) # Cria um objeto Motor na porta C
 
 def leMensagem(topic, msg):
     '''
@@ -29,12 +33,22 @@ def leMensagem(topic, msg):
         topic (string): O tópico ao qual a mensagem foi enviada.
         msg (string): O payload da mensagem recebida.
     '''
-    posicao = int(msg.decode()) # Recebe a mensagem e converte para inteiro
-    print("Recebido comando para mover o motor para posição: {}".format(posicao))
-    ev3.screen.clear()
-    ev3.screen.draw_text(0, 50, "Posição: {}".format(posicao)) # Exibe a posição na tela do Brick
-    motor.run_target(500, posicao) # Define a velocidade e a posição-alvo de um Servomotor Lego
-    enviaPosicaoDoMotor()
+    valor = int(msg.decode()) # Recebe a mensagem e converte para inteiro
+    if topic == TOPIC_SERVO:
+        print("Recebido comando para mover o servo para posição: {}".format(valor))
+        ev3.screen.clear()
+        ev3.screen.draw_text(0, 50, "Posição: {}".format(valor)) # Exibe a posição na tela do Brick
+        servo.run_target(500, valor) # Define a velocidade e a posição-alvo de um Servomotor Lego
+    else:
+        print("Recebido comando para mover o motor para velocidade: {}".format(valor))
+        ev3.screen.clear()
+        ev3.screen.draw_text(0, 50, "Velocidade: {}".format(valor))
+    if topic == TOPIC_ESQ:
+        motorEsq.dc(valor) # Define a velocidade do motor esquerdo
+    if topic == TOPIC_DIR:
+        motorDir.dc(valor) # Define a velocidade do motor direito
+    
+    enviaValorDoMotor(topic)
 
 client = MQTTClient(CLIENT_ID, BROKER, port=PORT) # Cria um cliente MQTT com o ID do brick, endereço e porta do Broker
 client.set_callback(leMensagem)  # Define a função de callback para mensagens recebidas
@@ -43,19 +57,24 @@ try:
     print("Conectado ao broker MQTT.")
 except OSError as e:
     print("Erro ao conectar ao broker MQTT: {}".format(e))
-client.subscribe(TOPIC_RECEIVE)
+client.subscribe(TOPIC_SERVO)
+client.subscribe(TOPIC_ESQ)
+client.subscribe(TOPIC_DIR)
 
-def enviaPosicaoDoMotor():
+def enviaValorDoMotor(topic):
     '''
-    Função para enviar a posição atual do motor.
+    Função para enviar a posição atual ou a velocidade do motor.
     '''
-    posicao = motor.angle() # Recebe o ângulo atual do motor
-    client.publish(TOPIC_SEND, str(posicao))
-    print("Enviado posição atual do motor: {}".format(posicao))
+    if topic == "Mqtt/Servo":
+        valor = servo.angle() # Recebe o ângulo atual do motor
+    else:
+        valor = motorEsq.speed()
+    client.publish(TOPIC_SEND, str(valor))
+    print("Enviado posição atual do motor: {}".format(valor))
     ev3.screen.clear()
-    ev3.screen.draw_text(0, 0, "Motor: {}".format(posicao))
+    ev3.screen.draw_text(0, 0, "Motor: {}".format(valor))
 
-enviaPosicaoDoMotor() # Envia a posição do motor na inicialização
+enviaValorDoMotor() # Envia a posição do motor na inicialização
 
 while True:
     client.check_msg()  # Verifica se há novas mensagens
