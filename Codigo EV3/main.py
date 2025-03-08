@@ -45,10 +45,12 @@ def leMensagem(topic, msg):
         ev3.screen.draw_text(0, 50, "Velocidade: {}".format(valor))
     if topic == TOPIC_ESQ:
         motorEsq.dc(valor) # Define a velocidade do motor esquerdo
+        motor = motorEsq
     if topic == TOPIC_DIR:
         motorDir.dc(valor) # Define a velocidade do motor direito
+        motor = motorDir
     
-    enviaValorDoMotor(topic)
+    enviaValorDoMotor(topic, motor)
 
 client = MQTTClient(CLIENT_ID, BROKER, port=PORT) # Cria um cliente MQTT com o ID do brick, endereço e porta do Broker
 client.set_callback(leMensagem)  # Define a função de callback para mensagens recebidas
@@ -61,20 +63,25 @@ client.subscribe(TOPIC_SERVO)
 client.subscribe(TOPIC_ESQ)
 client.subscribe(TOPIC_DIR)
 
-def enviaValorDoMotor(topic):
+def enviaValorDoMotor(topic, motor=None):
     '''
     Função para enviar a posição atual ou a velocidade do motor.
     '''
     if topic == "Mqtt/Servo":
         valor = servo.angle() # Recebe o ângulo atual do motor
+        print("Enviado posição atual do servo: {}".format(valor))
+        ev3.screen.clear()
+        ev3.screen.draw_text(0, 0, "Servo: {}".format(valor))
     else:
-        valor = motorEsq.speed()
+        valor = motor.speed()
+        print("Enviado velocidade atual do motor: {}".format(valor))
+        ev3.screen.clear()
+        ev3.screen.draw_text(0, 0, "Motor: {}".format(valor))
     client.publish(TOPIC_SEND, str(valor))
-    print("Enviado posição atual do motor: {}".format(valor))
-    ev3.screen.clear()
-    ev3.screen.draw_text(0, 0, "Motor: {}".format(valor))
 
-enviaValorDoMotor() # Envia a posição do motor na inicialização
+enviaValorDoMotor(TOPIC_SERVO) # Envia a posição do motor na inicialização
+enviaValorDoMotor(TOPIC_ESQ,motorEsq) # Envia a velocidade do motor esquerdo na inicialização
+enviaValorDoMotor(TOPIC_DIR,motorDir) # Envia a velocidade do motor direito na inicialização
 
 while True:
     client.check_msg()  # Verifica se há novas mensagens
